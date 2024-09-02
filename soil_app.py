@@ -6,7 +6,7 @@ import json
 import plotly.graph_objects as go
 
 # Load the model and label encoders
-data = joblib.load('C:\\Users\\HP\\Desktop\\sih-2024\\final_ass.pkl')
+data = joblib.load('final_ass.pkl')
 model = data['model']
 label_encoders = data['label_encoders']
 
