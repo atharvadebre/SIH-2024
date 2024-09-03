@@ -22,6 +22,15 @@ weather_condition_mapping = {key: idx for idx, key in enumerate(label_encoders['
 
 app = FastAPI()
 
+live_temperature = 32.0
+
+@app.post("/temperature")
+async def update_temperature(request: Request):
+    global live_temperature
+    data = await request.json()
+    live_temperature = data.get("temperature", 32.0)
+    return {"message": "Temperature updated successfully"}
+
 @app.post("/train")
 async def train_model(request: Request):
     # Extract data from the POST request
@@ -128,6 +137,7 @@ def plot_water_requirement_gauge(water_requirement):
 
 def main():
     global rainfall
+    global live_temperature
     st.set_page_config(page_title="Agricultural Prediction System", page_icon="🌾", layout="wide")
 
     st.markdown("""
@@ -196,7 +206,7 @@ def main():
         st.session_state.water_requirement = 0.0
 
     if 'motor_capacity' not in st.session_state:
-        st.session_state.motor_capacity = 0.0
+        st.session_state.motor_capacity = 10.0
 
     st.markdown("<div class='title'>Crop Water Requirement Prediction</div>", unsafe_allow_html=True)
     st.markdown("<div class='subheader'>Enter the following details:</div>", unsafe_allow_html=True)
@@ -231,7 +241,7 @@ def main():
             api_rainfall = 0.0
     else:
         auto_weather_condition = 'NORMAL'
-        temperature = 32.0
+        temperature = live_temperature
         api_rainfall = 0.0
 
     col1, col2 = st.columns(2)
