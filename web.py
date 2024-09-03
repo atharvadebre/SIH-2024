@@ -221,7 +221,7 @@ def main():
         temperature, humidity, weather_description, pressure, api_rainfall = get_weather(city)
         if temperature is not None and humidity is not None:
             st.markdown(f"<div class='weather-container'>Weather in {city}: {weather_description.capitalize()}<br>"
-                        f"Temperature: {temperature}°C<br>"
+                        f"Temperature: {live_temperature}°C<br>"
                         f"Humidity: {humidity}%<br>"
                         f"Pressure: {pressure} hPa<br>"
                         f"Rainfall: {api_rainfall} mm<br>",
