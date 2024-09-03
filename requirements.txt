@@ -1,9 +1,9 @@
-streamlit~=1.32.0
+streamlit
 scikit-learn
-pandas~=2.2.2
-numpy~=1.26.4
-requests~=2.32.2
-plotly~=5.22.0
-joblib~=1.4.2
-uvicorn~=0.30.6
-fastapi~=0.112.2
+pandas
+numpy
+requests
+plotly
+joblib
+uvicorn
+fastapi
