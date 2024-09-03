@@ -241,7 +241,6 @@ def main():
             api_rainfall = 0.0
     else:
         auto_weather_condition = 'NORMAL'
-        temperature = live_temperature
         api_rainfall = 0.0
 
     col1, col2 = st.columns(2)
@@ -249,7 +248,7 @@ def main():
         weather_condition = st.selectbox("Weather Condition", list(weather_condition_mapping.keys()),
                                          index=list(weather_condition_mapping.keys()).index(auto_weather_condition))
     with col2:
-        temperature_input = st.number_input("Temperature (°C)", value=temperature)
+        temperature_input = st.number_input("Temperature (°C)", value=live_temperature)
     soil_moisture = st.number_input("Soil Moisture (%)", value=30.0)
     humidity_input = st.number_input("Humidity (%)", value=60.0)
     rainfall_input = st.number_input("Rainfall (mm)", value=api_rainfall)  # Use 0.0 if not availabl
