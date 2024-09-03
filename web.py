@@ -1,23 +1,53 @@
+from threading import Thread
+
 import streamlit as st
 import joblib
-import pandas as pd
 import numpy as np
 import requests
 import json
 import plotly.graph_objects as go
+from fastapi import FastAPI, Request
+import uvicorn
 
-# Load the model
-svm_poly_model = joblib.load('C:/Users/HP/Downloads/Crop_recommnedation_&_irrigation-20240831T163431Z-001/Crop_recommnedation_&_irrigation/svm_poly_model.pkl')
+# Load the model and label encoders
+data = joblib.load('final_ass.pkl')
+model = data['model']
+label_encoders = data['label_encoders']
 
+# Define mappings for any required manual adjustments
+crop_type_mapping = {key: idx for idx, key in enumerate(label_encoders['CROP TYPE'].classes_)}
+soil_type_mapping = {key: idx for idx, key in enumerate(label_encoders['SOIL TYPE'].classes_)}
+region_mapping = {key: idx for idx, key in enumerate(label_encoders['REGION'].classes_)}
+weather_condition_mapping = {key: idx for idx, key in enumerate(label_encoders['WEATHER CONDITION'].classes_)}
 
-# Label encoding mappings for SVM model
-crop_type_mapping = {'BANANA': 0, 'BEAN': 1, 'CABBAGE': 2, 'CITRUS': 3, 'COTTON': 4, 'MAIZE': 5, 'MELON': 6,
-                     'MUSTARD': 7, 'ONION': 8, 'OTHER': 9, 'POTATO': 10, 'RICE': 11, 'SOYABEAN': 12, 'SUGARCANE': 13,
-                     'TOMATO': 14, 'WHEAT': 15}
-soil_type_mapping = {'DRY': 0, 'HUMID': 1, 'WET': 2}
-weather_condition_mapping = {'NORMAL': 0, 'RAINY': 1, 'SUNNY': 2, 'WINDY': 3}
+app = FastAPI()
 
-# Fetch weather data from the OpenWeatherMap API
+@app.post("/train")
+async def train_model(request: Request):
+    # Extract data from the POST request
+    request_data = await request.json()
+    features = request_data['features']
+    target = request_data['target']
+
+    # Convert data to the appropriate format (e.g., numpy array)
+    X = np.array(features).reshape(1, -1)
+    y = np.array(target)
+
+    # Update or train the model (assuming the model supports partial_fit)
+    model.partial_fit(X, y)
+
+    # Optionally save the updated model
+    joblib.dump({'model': model, 'label_encoders': label_encoders}, 'final_ass.pkl')
+
+    return {"message": "Model updated successfully"}
+
+def run_fastapi():
+    uvicorn.run(app, host="0.0.0.0", port=8000)
+
+# Start FastAPI in a separate thread
+fastapi_thread = Thread(target=run_fastapi)
+fastapi_thread.start()
+
 def get_weather(city):
     api_key = "b3c62ae7f7ad5fc3cb0a7b56cb7cbda6"
     url = f"https://api.openweathermap.org/data/2.5/weather?q={city}&appid={api_key}"
@@ -26,26 +56,28 @@ def get_weather(city):
         response.raise_for_status()  # Raise an exception for any HTTP errors
     except requests.exceptions.HTTPError as err:
         st.error(f"Error: {err}")
-        return None, None, None
+        return None, None, None, None, None
 
     try:
         data = json.loads(response.text)
         if data['cod'] != 200:
             st.error(f"Error: {data['message']}")
-            return None, None, None
+            return None, None, None, None, None
     except json.JSONDecodeError as err:
         st.error(f"Error: Failed to parse response JSON - {err}")
-        return None, None, None
+        return None, None, None, None, None
 
     # Extract relevant weather information
     weather_description = data['weather'][0]['description']
     temperature = data['main']['temp']
     humidity = data['main']['humidity']
     pressure = data['main']['pressure']
+    # Rainfall is not provided in the response, need to use an appropriate field
+    rainfall = data.get('rain', {}).get('1h', 0)  # Rainfall in the last 1 hour, default to 0 if not present
     # Convert temperature from Kelvin to Celsius
     temperature = round(temperature - 273.15, 2)
 
-    return temperature, humidity, weather_description, pressure
+    return temperature, humidity, weather_description, pressure, rainfall
 
 def plot_water_requirement_gauge(water_requirement):
     fig = go.Figure(go.Indicator(
@@ -67,21 +99,20 @@ def plot_water_requirement_gauge(water_requirement):
         }
     ))
 
-    # Adjust the layout to centralize the gauge chart and set a single title
     fig.update_layout(
-        height=400,  # Adjust height as needed
-        width=600,   # Adjust width as needed
-        margin={"r": 40, "t": 60, "l": 40, "b": 20},  # Adjust margins for proper centering
+        height=400,
+        width=600,
+        margin={"r": 40, "t": 60, "l": 40, "b": 20},
         paper_bgcolor="black",
         plot_bgcolor="black",
         title={
-            'text': "Water Requirement (litres/sq.m)",  # Set the title text
+            'text': "Water Requirement (litres/sq.m)",
             'font': {
                 'size': 18,
                 'color': 'white'
             },
-            'x': 0.5,  # Center title horizontally
-            'xanchor': 'center'  # Anchor title at the center
+            'x': 0.5,
+            'xanchor': 'center'
         },
         xaxis=dict(
             showticklabels=False,
@@ -95,11 +126,10 @@ def plot_water_requirement_gauge(water_requirement):
 
     return fig
 
-
 def main():
+    global rainfall
     st.set_page_config(page_title="Agricultural Prediction System", page_icon="🌾", layout="wide")
 
-    # CSS for custom styling
     st.markdown("""
     <style>
     .stApp { 
@@ -141,31 +171,6 @@ def main():
         border-radius: 5px;
         padding: 10px;
     }
-    .container {
-        display: flex;
-        justify-content: space-between;
-        margin-top: 20px;
-        text-align: center;
-
-    }
-    .left-column {
-        flex: 1;
-        padding-right: 10px;
-    }
-    .right-column {
-        flex: 1;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-    }
-    .map-img {
-        width: 100%;
-    }
-    .map-container {
-        width: 800px; /* Adjust width as needed */
-        height: 600px; /* Adjust height as needed */
-    }
     .prediction-box {
         border: 2px solid #FFD700;
         padding: 10px;
@@ -187,7 +192,6 @@ def main():
     </style>
     """, unsafe_allow_html=True)
 
-    # Initialize session state
     if 'water_requirement' not in st.session_state:
         st.session_state.water_requirement = 0.0
 
@@ -199,23 +203,23 @@ def main():
 
     crop_type = st.selectbox("Crop Type", list(crop_type_mapping.keys()))
     soil_type = st.selectbox("Soil Type", list(soil_type_mapping.keys()))
+    region = st.selectbox("Region Type", list(region_mapping.keys()))
 
-    city = st.text_input("Enter your city to get the weather details (optional)")
+    city = st.text_input("Enter your city to get the weather details")
 
     if city and st.button("Get Weather"):
-        temperature, humidity, weather_description, pressure = get_weather(city)
+        temperature, humidity, weather_description, pressure, api_rainfall = get_weather(city)
         if temperature is not None and humidity is not None:
             st.markdown(f"<div class='weather-container'>Weather in {city}: {weather_description.capitalize()}<br>"
                         f"Temperature: {temperature}°C<br>"
                         f"Humidity: {humidity}%<br>"
-                        f"Pressure: {pressure}hg<br>",
+                        f"Pressure: {pressure} hPa<br>"
+                        f"Rainfall: {api_rainfall} mm<br>",
                         unsafe_allow_html=True)
 
-            # Auto-fill weather condition based on description
             if any(word in weather_description.lower() for word in ['sunny', 'clear', 'warm', 'hot']):
                 auto_weather_condition = 'SUNNY'
-            elif any(
-                    word in weather_description.lower() for word in ['rain', 'drizzle', 'cloud', 'clouds', 'mist']):
+            elif any(word in weather_description.lower() for word in ['rain', 'drizzle', 'cloud', 'clouds', 'mist']):
                 auto_weather_condition = 'RAINY'
             elif any(word in weather_description.lower() for word in ['wind', 'winds', 'haze']):
                 auto_weather_condition = 'WINDY'
@@ -224,31 +228,40 @@ def main():
         else:
             auto_weather_condition = 'NORMAL'
             temperature = 32.0
-
+            api_rainfall = 0.0
     else:
         auto_weather_condition = 'NORMAL'
         temperature = 32.0
+        api_rainfall = 0.0
 
-    # User input for crop water requirement prediction
     col1, col2 = st.columns(2)
     with col1:
         weather_condition = st.selectbox("Weather Condition", list(weather_condition_mapping.keys()),
                                          index=list(weather_condition_mapping.keys()).index(auto_weather_condition))
     with col2:
         temperature_input = st.number_input("Temperature (°C)", value=temperature)
+    soil_moisture = st.number_input("Soil Moisture (%)", value=30.0)
+    humidity_input = st.number_input("Humidity (%)", value=60.0)
+    rainfall_input = st.number_input("Rainfall (mm)", value=api_rainfall)  # Use 0.0 if not availabl
 
-    # Predict button
     if st.button("Predict Water Requirement"):
         # Encode inputs for the model
-        crop_type_encoded = crop_type_mapping[crop_type]
-        soil_type_encoded = soil_type_mapping[soil_type]
-        weather_condition_encoded = weather_condition_mapping[weather_condition]
+        encoded_input = [
+            label_encoders['CROP TYPE'].transform([crop_type])[0],
+            label_encoders['SOIL TYPE'].transform([soil_type])[0],
+            label_encoders['REGION'].transform([region])[0],
+            temperature_input,
+            label_encoders['WEATHER CONDITION'].transform([weather_condition])[0],
+            soil_moisture,
+            humidity_input,
+            rainfall_input
+        ]
 
-        # Create the input feature array
-        features = np.array([[crop_type_encoded, soil_type_encoded, weather_condition_encoded, temperature_input]])
+        # Convert to numpy array and reshape for prediction
+        encoded_input = np.array(encoded_input).reshape(1, -1)
 
         # Make the prediction
-        water_requirement = svm_poly_model.predict(features)[0]
+        water_requirement = model.predict(encoded_input)[0]
         st.session_state.water_requirement = water_requirement
 
         st.markdown(f"<div class='prediction-box'>The estimated water requirement is: {water_requirement:.2f} litres/sq.m</div>",
@@ -258,11 +271,9 @@ def main():
     if st.session_state.water_requirement > 0.0:
         st.plotly_chart(plot_water_requirement_gauge(st.session_state.water_requirement))
 
-    st.markdown(
-        "<div class='subheader'>Motor Capacity (in Horsepower):</div>", unsafe_allow_html=True)
+    st.markdown("<div class='subheader'>Motor Capacity (in Horsepower):</div>", unsafe_allow_html=True)
     motor_capacity = st.number_input("Motor Capacity (HP)", value=st.session_state.motor_capacity)
 
-    # Only display if water requirement has been calculated
     if st.session_state.water_requirement > 0:
         if st.button("Calculate Irrigation Time"):
             # Assuming motor efficiency is 75% and flow rate is 0.1 litres per HP per second
