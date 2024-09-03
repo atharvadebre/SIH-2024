@@ -84,9 +84,9 @@ def get_weather(city):
     # Rainfall is not provided in the response, need to use an appropriate field
     rainfall = data.get('rain', {}).get('1h', 0)  # Rainfall in the last 1 hour, default to 0 if not present
     # Convert temperature from Kelvin to Celsius
-    temperature = round(temperature - 273.15, 2)
+    api_temperature = round(temperature - 273.15, 2)
 
-    return temperature, humidity, weather_description, pressure, rainfall
+    return api_temperature, humidity, weather_description, pressure, rainfall
 
 def plot_water_requirement_gauge(water_requirement):
     fig = go.Figure(go.Indicator(
@@ -215,11 +215,11 @@ def main():
     soil_type = st.selectbox("Soil Type", list(soil_type_mapping.keys()))
     region = st.selectbox("Region Type", list(region_mapping.keys()))
 
-    city = st.text_input("Enter your city to get the weather details")
+    city = st.text_input("Enter your city to get the weather details: ")
 
     if city and st.button("Get Weather"):
-        temperature, humidity, weather_description, pressure, api_rainfall = get_weather(city)
-        if temperature is not None and humidity is not None:
+        api_temperature, humidity, weather_description, pressure, api_rainfall = get_weather(city)
+        if live_temperature is not None and humidity is not None:
             st.markdown(f"<div class='weather-container'>Weather in {city}: {weather_description.capitalize()}<br>"
                         f"Temperature: {live_temperature}°C<br>"
                         f"Humidity: {humidity}%<br>"
@@ -237,11 +237,10 @@ def main():
                 auto_weather_condition = 'NORMAL'
         else:
             auto_weather_condition = 'NORMAL'
-            temperature = 32.0
+            live_temperature = 32.0
             api_rainfall = 0.0
     else:
         auto_weather_condition = 'NORMAL'
-        temperature = live_temperature
         api_rainfall = 0.0
 
     col1, col2 = st.columns(2)
@@ -249,7 +248,7 @@ def main():
         weather_condition = st.selectbox("Weather Condition", list(weather_condition_mapping.keys()),
                                          index=list(weather_condition_mapping.keys()).index(auto_weather_condition))
     with col2:
-        temperature_input = st.number_input("Temperature (°C)", value=temperature)
+        temperature_input = st.number_input("Temperature (°C)", value=live_temperature)
     soil_moisture = st.number_input("Soil Moisture (%)", value=30.0)
     humidity_input = st.number_input("Humidity (%)", value=60.0)
     rainfall_input = st.number_input("Rainfall (mm)", value=api_rainfall)  # Use 0.0 if not availabl
